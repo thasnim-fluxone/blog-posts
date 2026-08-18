@@ -8,6 +8,19 @@ agents, with working memory and long-term memory in OpenSearch.
 Every command below runs **from the project root** — the directory containing
 `pom.xml`.
 
+## 0. Environment file
+
+Copy `.env.example` to `.env` and set a password that satisfies the OpenSearch
+complexity policy (min 8 chars, upper, lower, digit, special character):
+
+```bash
+cp .env.example .env
+# Edit .env and set OPENSEARCH_PASSWORD to a value you choose
+```
+
+Docker Compose reads `.env` automatically. The file is git-ignored — never
+commit real credentials.
+
 ## 1. OpenSearch
 
 The cluster is defined in `compose-devservices.yml`. Quarkus starts it when dev
@@ -30,7 +43,7 @@ long-lived demo certificate — extract it once and forget it.
 ```bash
 os() {
   curl -s --cacert ./opensearch-ca.pem \
-    -u admin:<your-admin-password> -H "Content-Type: application/json" "$@"
+    -u "admin:${OPENSEARCH_PASSWORD}" -H "Content-Type: application/json" "$@"
 }
 os "https://localhost:9200/_cat/plugins?v" | grep ml
 ```
@@ -64,7 +77,7 @@ answers 500 with `index must not be null`. That is expected until section 6.
 
 ```bash
 export OPENSEARCH_USERNAME=admin
-export OPENSEARCH_PASSWORD='<your-admin-password>'
+export OPENSEARCH_PASSWORD='<password-from-your-.env>'
 export MEMORY_CONTAINER_ID=$CID
 export OPENAI_API_KEY=sk-...
 ```

@@ -8,7 +8,7 @@ services:
     container_name: loyalty-opensearch
     environment:
       discovery.type: single-node
-      OPENSEARCH_INITIAL_ADMIN_PASSWORD: L0cal-Dev-P@ssw0rd
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_PASSWORD}
       OPENSEARCH_JAVA_OPTS: -Xms2g -Xmx2g
     ports:
       # Fixed, because the application is not an integrated Dev Service and so
@@ -19,7 +19,7 @@ services:
       nofile:  { soft: 65536, hard: 65536 }
     healthcheck:
       test: >
-        curl -sk -u admin:L0cal-Dev-P@ssw0rd
+        curl -sk -u admin:${OPENSEARCH_PASSWORD}
         https://localhost:9200/_cluster/health || exit 1
       interval: 10s
       timeout: 5s
@@ -41,7 +41,7 @@ services:
       /bin/sh -c "
         for i in $(seq 1 30); do
           STATUS=$(curl -sk -o /dev/null -w '%{http_code}'
-            -u admin:L0cal-Dev-P@ssw0rd
+            -u admin:${OPENSEARCH_PASSWORD}
             -X PUT https://opensearch:9200/_cluster/settings
             -H 'Content-Type: application/json'
             -d '{\"persistent\":{

@@ -1,2 +1,3 @@
 target/
 opensearch-ca.pem
+.env
