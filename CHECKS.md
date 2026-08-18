@@ -39,59 +39,49 @@ Real index names, for anyone writing retention policies later — note the
 .plugins-ml-am-memory-container
 ```
 
-## Not yet verified
+## Verified by full end-to-end run — Quarkus 3.33.2, OpenSearch 3.7.0, gpt-4o-mini
 
-**Runtime bugs found by scenario testing** (both fixed):
-- ~~async memory writes~~ — `CompletableFuture.runAsync()` with no executor uses the
-  JDK common pool, whose threads carry the wrong context classloader. `ServiceLoader`
-  then resolves the wrong config factory and the REST client fails with
-  `SmallRyeConfigFactory: QuarkusConfigFactory not a subtype`. **Every memory write
-  silently failed**, so recall always returned empty. Fixed by injecting
-  `ManagedExecutor`.
-- ~~catalogue reached the specialists~~ — the supervisor planner fills agent arguments
-  itself, and for a `String catalogue` parameter it emitted the literal `"String"`
-  from the agent description. Specialists received `Catalogue:\nString` and invented
-  rewards. Fixed by moving the catalogue into `MemberContext`, which resolves from
-  the agentic scope rather than from planner output.
-  **Lesson: never pass data to an agent as a String parameter — the planner will
-  invent a value for it.**
+`mvn test -Dtest=RedemptionServiceTest` — 4/4 passing, including pessimistic lock
+concurrency test (8 concurrent threads, exactly 1 CONFIRMED).
 
-**Framework wiring** (fails at build or startup):
-- ~~Flyway migration matches the entities~~ — **FIXED.** `@GeneratedValue` with no
-  strategy resolves to `SEQUENCE` under Hibernate 6 and expects `redemption_SEQ`,
-  but `BIGSERIAL` creates `redemption_id_seq`. Startup failed with
-  `missing sequence [redemption_SEQ]`. The entity now specifies
-  `GenerationType.IDENTITY`, which is what `BIGSERIAL` actually provides.
-- ~~truststore path~~ — **FIXED.** `quarkus.tls.<name>.trust-store.pem.certs`
-  resolves against the working directory, not the classpath. The CA must sit at
-  the project root; putting it in `src/main/resources` gives
-  `NoSuchFileException: opensearch-ca.pem` at startup.
-- ~~pom builds~~ — **FIXED.** The hand-written pom omitted
-  `<maven.compiler.parameters>true</maven.compiler.parameters>`. Without it,
-  parameter names are absent from the bytecode, every Qute placeholder name
-  resolves to `null`, and the build fails with
-  `Duplicate key null (attempted merging values 0 and 1)` from
-  `AiServicesProcessor`. `quarkus create app` sets this automatically.
-- ~~`MonitoredAgent` resolves~~ — **FALSE.** No such type. The package exists but
-  contains `AgentListener` (interface), `AgentMonitor` (concrete class implementing
-  it), `MonitoredExecution`, `AgentRequest`/`AgentResponse`. `HtmlReportGenerator`
-  does not exist either. Observability is registered, not inherited. The `extends
-  MonitoredAgent` clause has been removed from `LoyaltyWorkflow`.
-- Note: `langchain4j-agentic` resolves as **1.11.7-beta19** — the agentic module
-  is beta, so APIs move between releases
-- `quarkus-langchain4j-agentic` resolves on the pinned platform version
-- `io.quarkus.rest.client.reactive.ClientBasicAuth` resolves
-- `quarkus.rest-client.<key>.tls-configuration-name` is accepted
-- Flyway migration matches the entities under `schema-management=validate`
+Live model run confirmed all scenarios:
 
-**Behaviour** (needs a model):
-- Qute resolves `{context.tier}` on a record inside `@UserMessage`
-- `@Output` parameter name matches the composer's `outputKey`
-- Supervisor routes correctly and invokes nothing for small talk
-- Pessimistic lock prevents double-spend under concurrency
-- Long-term extraction produces `USER_PREFERENCE` records with a `memory` field
-- Extraction changes a later recommendation across sessions
+| Scenario | Result | Notes |
+|---|---|---|
+| Recommendation (Alice, 2450 pts) | ✅ | `recommend$0$0` only; no other specialists |
+| Working memory follow-up ("how about the second one?") | ✅ | Resolves with history; fails gracefully if async write hasn't flushed yet |
+| Supervisor guard (Bob, 180 pts, travel voucher) | ✅ | Guard allows (180 > 150 floor); specialist invoked; `RedemptionService` returns `INSUFFICIENT_POINTS` |
+| Redemption (branded travel mug) | ✅ | `REWARD: Branded travel mug / COST: 900` parsed; catalogue price 900 charged; confirmation appended |
+| Small talk ("thanks!") | ✅ | Supervisor went `done` immediately — zero specialists invoked |
+| Long-term extraction | ✅ | `USER_PREFERENCE` records written; `strategy_type` and `memory` fields confirmed |
+| Long-term loop (preference shapes later session) | ✅ | Preference stated in s-9 appeared in `Known preferences` of s-10; travel mug absent from recommendation |
+| Qute resolves `{context.tier}` on a record | ✅ | Confirmed in every request log — `Member tier: GOLD` reached the specialist |
+| `@Output` parameter name matches `outputKey` | ✅ | `composedResponse` wired correctly; composer output reached the HTTP response |
 
-**Environment:**
-- Keycloak Dev Services provides logins `alice` and `bob`
-- Token endpoint path and `quarkus-app` / `secret` credentials
+## Bugs found and fixed during the run
+
+**Infrastructure / compose:**
+- `OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g` — memory circuit breaker tripped when deploying
+  the embedding model. Fixed: bumped to `-Xms2g -Xmx2g` in `compose-devservices.yml`.
+- Init container race condition — the init service fires immediately after the OpenSearch
+  health check passes, but the security plugin initialises a few seconds later. The curl
+  command returns `OpenSearch Security not initialized` and the cluster settings are never
+  applied. Workaround documented in Step 14: apply settings manually if model registration
+  returns `No eligible node found`.
+
+**Step 14 connector body (three separate issues found and fixed):**
+1. `"messages": ${parameters.messages}` — the agentic memory pipeline does not pass a
+   `messages` parameter. It passes `system_prompt` and `user_prompt`. Any other parameter
+   name produces `parameter placeholder not filled`.
+2. `embedding_dimension` is required for `TEXT_EMBEDDING` containers — omitting it returns
+   `Dimension is required for TEXT_EMBEDDING`. all-MiniLM-L6-v2 → 384.
+3. `post_process_function` is required — OpenAI returns `$.choices[0].message.content` but
+   the pipeline reads `$.output.message.content[0].text`. Without the Painless reshape script
+   the extraction fails with `Missing property in path $['output']`.
+
+All three fixes are in the blog post HTML (Step 14) and in `compose-devservices.yml`.
+
+## Environment
+
+- Keycloak Dev Services provides logins `alice` and `bob` ✅
+- Token endpoint path and `quarkus-app` / `secret` credentials ✅

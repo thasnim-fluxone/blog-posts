@@ -27,16 +27,34 @@ services:
       start_period: 30s
 
   # Applies the cluster settings ml-commons needs on a single node, then exits.
+  # Uses a retry loop because the security plugin finishes initialising a few
+  # seconds after the health check passes — a single curl fires too early and
+  # returns "OpenSearch Security not initialized", silently leaving the settings
+  # unset. The loop retries until the PUT is accepted (HTTP 200) or 30 attempts
+  # are exhausted.
   opensearch-init:
     image: curlimages/curl:8.11.1
     depends_on:
       opensearch:
         condition: service_healthy
-    command: >
-      -sk -u admin:L0cal-Dev-P@ssw0rd
-      -X PUT https://opensearch:9200/_cluster/settings
-      -H "Content-Type: application/json"
-      -d '{"persistent":{
-             "plugins.ml_commons.only_run_on_ml_node":false,
-             "plugins.ml_commons.model_access_control_enabled":false,
-             "plugins.ml_commons.native_memory_threshold":99}}'
+    entrypoint: >
+      /bin/sh -c "
+        for i in $(seq 1 30); do
+          STATUS=$(curl -sk -o /dev/null -w '%{http_code}'
+            -u admin:L0cal-Dev-P@ssw0rd
+            -X PUT https://opensearch:9200/_cluster/settings
+            -H 'Content-Type: application/json'
+            -d '{\"persistent\":{
+                   \"plugins.ml_commons.only_run_on_ml_node\":false,
+                   \"plugins.ml_commons.model_access_control_enabled\":false,
+                   \"plugins.ml_commons.native_memory_threshold\":99}}');
+          if [ \"$$STATUS\" = '200' ]; then
+            echo 'ml-commons settings applied';
+            exit 0;
+          fi;
+          echo \"Attempt $$i failed (HTTP $$STATUS), retrying in 5s...\";
+          sleep 5;
+        done;
+        echo 'Failed to apply ml-commons settings after 30 attempts';
+        exit 1
+      "

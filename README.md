@@ -5,10 +5,9 @@ Runnable companion to *Memory for a supervised agent system*.
 A coffee-chain loyalty assistant: a supervisor routing to three specialist
 agents, with working memory and long-term memory in OpenSearch.
 
-> **Status:** the deterministic logic (supervisor guard, sanitiser, proposal
-> parsing, catalogue) has been verified by execution. The Quarkus wiring and
-> the OpenSearch endpoint paths are written from documentation and need a
-> local run to confirm. See CHECKS.md.
+> **Status:** fully verified end-to-end — all tests passing, all scenarios
+> confirmed against a live cluster (OpenSearch 3.7.0, gpt-4o-mini, Quarkus
+> 3.33.2). See CHECKS.md for details.
 
 ## 0. Unpack and enter the project
 
@@ -135,5 +134,6 @@ the article. Extraction is asynchronous — allow ~15 seconds.
 ## Cleanup
 
 ```bash
-docker stop opensearch && docker rm opensearch
+podman stop opensearch && podman rm opensearch
+# or: docker stop opensearch && docker rm opensearch
 ```
