@@ -1,0 +1,42 @@
+# Started and stopped automatically by Quarkus in dev and test mode.
+# Full container control, which is why this is here rather than relying on an
+# extension's default Dev Service — the cluster needs its security plugin on
+# and ml-commons configured for a single node.
+services:
+  opensearch:
+    image: opensearchproject/opensearch:3.7.0
+    container_name: loyalty-opensearch
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: L0cal-Dev-P@ssw0rd
+      OPENSEARCH_JAVA_OPTS: -Xms2g -Xmx2g
+    ports:
+      # Fixed, because the application is not an integrated Dev Service and so
+      # its URL is not rewritten automatically.
+      - '9200:9200'
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile:  { soft: 65536, hard: 65536 }
+    healthcheck:
+      test: >
+        curl -sk -u admin:L0cal-Dev-P@ssw0rd
+        https://localhost:9200/_cluster/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Applies the cluster settings ml-commons needs on a single node, then exits.
+  opensearch-init:
+    image: curlimages/curl:8.11.1
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    command: >
+      -sk -u admin:L0cal-Dev-P@ssw0rd
+      -X PUT https://opensearch:9200/_cluster/settings
+      -H "Content-Type: application/json"
+      -d '{"persistent":{
+             "plugins.ml_commons.only_run_on_ml_node":false,
+             "plugins.ml_commons.model_access_control_enabled":false,
+             "plugins.ml_commons.native_memory_threshold":99}}'
