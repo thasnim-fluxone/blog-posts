@@ -30,7 +30,7 @@ long-lived demo certificate — extract it once and forget it.
 ```bash
 os() {
   curl -s --cacert ./opensearch-ca.pem \
-    -u admin:L0cal-Dev-P@ssw0rd -H "Content-Type: application/json" "$@"
+    -u admin:<your-admin-password> -H "Content-Type: application/json" "$@"
 }
 os "https://localhost:9200/_cat/plugins?v" | grep ml
 ```
@@ -64,7 +64,7 @@ answers 500 with `index must not be null`. That is expected until section 6.
 
 ```bash
 export OPENSEARCH_USERNAME=admin
-export OPENSEARCH_PASSWORD='L0cal-Dev-P@ssw0rd'
+export OPENSEARCH_PASSWORD='<your-admin-password>'
 export MEMORY_CONTAINER_ID=$CID
 export OPENAI_API_KEY=sk-...
 ```
