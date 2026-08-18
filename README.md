@@ -5,20 +5,8 @@ Runnable companion to *Memory for a supervised agent system*.
 A coffee-chain loyalty assistant: a supervisor routing to three specialist
 agents, with working memory and long-term memory in OpenSearch.
 
-> **Status:** fully verified end-to-end — all tests passing, all scenarios
-> confirmed against a live cluster (OpenSearch 3.7.0, gpt-4o-mini, Quarkus
-> 3.33.2). See CHECKS.md for details.
-
-## 0. Unpack and enter the project
-
 Every command below runs **from the project root** — the directory containing
-`pom.xml`. Check with `ls pom.xml` before continuing.
-
-```bash
-unzip loyalty-agents.zip
-cd loyalty-agents
-ls pom.xml            # should print: pom.xml
-```
+`pom.xml`.
 
 ## 1. OpenSearch
 
